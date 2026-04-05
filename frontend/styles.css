@@ -1,0 +1,172 @@
+/* ── Global ──────────────────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  background-color: #0d1117;
+  color: #e6edf3;
+}
+
+#app {
+  min-height: 100%;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────────── */
+.navbar-brand span {
+  color: #58a6ff;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-size: 1.25rem;
+}
+
+/* ── Auth card ───────────────────────────────────────────────────────────── */
+.auth-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 0%, #1a2744 0%, #0d1117 70%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid #30363d;
+  background-color: #161b22;
+  border-radius: 12px;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.auth-logo {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #58a6ff;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.25rem;
+}
+
+.auth-tagline {
+  color: #8b949e;
+  font-size: 0.85rem;
+  margin-bottom: 2rem;
+}
+
+/* ── Dashboard ───────────────────────────────────────────────────────────── */
+.container-card {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.container-card:hover {
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 1px #1f4788;
+}
+
+.status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.3em 0.7em;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-running   { background: #1f4a1f; color: #3fb950; border: 1px solid #2ea043; }
+.status-starting  { background: #3d2f0a; color: #d29922; border: 1px solid #bb8009; }
+.status-pending   { background: #222;    color: #8b949e; border: 1px solid #444; }
+.status-stopped   { background: #2d1f1f; color: #f85149; border: 1px solid #a5202c; }
+.status-error     { background: #2d1f1f; color: #f85149; border: 1px solid #a5202c; }
+
+/* ── Container detail ────────────────────────────────────────────────────── */
+.container-detail-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px); /* below navbar */
+}
+
+.terminal-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  background: #0d1117;
+  position: relative;
+  overflow: hidden;
+}
+
+#terminal-mount {
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.xterm {
+  height: 100%;
+}
+
+.port-panel {
+  flex: 0 0 auto;
+  max-height: 45vh;
+  overflow-y: auto;
+  border-top: 1px solid #30363d;
+  background-color: #161b22;
+  padding: 1rem 1.25rem;
+}
+
+.port-iframe-wrapper {
+  width: 100%;
+  height: 500px;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 0.75rem;
+  background: #fff;
+}
+
+.port-iframe-wrapper iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ── Terminal status overlay ─────────────────────────────────────────────── */
+.terminal-overlay {
+  position: absolute;
+  inset: 0;
+  background: #0d1117;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1rem;
+  z-index: 10;
+}
+
+.terminal-overlay .overlay-text {
+  color: #8b949e;
+  font-size: 0.95rem;
+}
+
+/* ── Misc ────────────────────────────────────────────────────────────────── */
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #8b949e;
+}
+
+.empty-state i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+  color: #30363d;
+}

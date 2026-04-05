@@ -1,0 +1,45 @@
+# Local development docker-compose.
+#
+# Requirements:
+#   - A running Kubernetes cluster accessible via ~/.kube/config
+#     (kind, k3d, minikube, or remote cluster all work)
+#   - kubectl applied k8s/ manifests (namespace + RBAC)
+#
+# Usage:
+#   cp .env.example .env        # set SECRET_KEY
+#   docker-compose up --build
+#
+# The backend will connect to your cluster via the mounted kubeconfig.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Live-reload source files
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      # Persistent SQLite database
+      - ./data:/app/data
+      # Kubeconfig for cluster access (read-only)
+      - ${HOME}/.kube:/root/.kube:ro
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/kokoko.db
+      - CONTAINER_NAMESPACE=kokoko-containers
+      - BACKEND_NAMESPACE=kokoko
+      - CONTAINER_IMAGE=kokoko/ubuntu-ttyd:latest
+      - TTYD_PORT=7681
+      - MAX_CONTAINERS_PER_USER=5
+      # Override in .env or here:
+      - SECRET_KEY=${SECRET_KEY:-dev-insecure-change-me}
+      # Tell the k8s client to use the mounted kubeconfig
+      - KUBECONFIG_PATH=/root/.kube/config
+    command: >
+      uvicorn backend.main:app
+        --host 0.0.0.0
+        --port 8000
+        --reload
+    restart: unless-stopped

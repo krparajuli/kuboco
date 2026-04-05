@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kokoko
+  labels:
+    kubernetes.io/metadata.name: kokoko
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kokoko-containers
+  labels:
+    kubernetes.io/metadata.name: kokoko-containers
