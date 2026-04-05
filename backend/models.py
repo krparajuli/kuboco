@@ -34,7 +34,7 @@ class Container(Base):
     pod_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     svc_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     namespace: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="kokoko-containers"
+        String(64), nullable=False, default="kuboco-containers"
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     image: Mapped[str] = mapped_column(String(256), nullable=False)

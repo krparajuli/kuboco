@@ -47,10 +47,10 @@ def decode_token(token: str) -> dict:
 async def get_token_from_request(
     request: Request,
     token: Optional[str] = Query(default=None, alias="token"),
-    kokoko_token: Optional[str] = Cookie(default=None),
+    kuboco_token: Optional[str] = Cookie(default=None),
 ) -> str:
     """Extract JWT from cookie (HTTP) or ?token= query param (WebSocket)."""
-    t = kokoko_token or token
+    t = kuboco_token or token
     if not t:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

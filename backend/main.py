@@ -1,4 +1,4 @@
-"""Kokoko — Kubernetes Container Runner Backend."""
+"""Kuboco — Kubernetes Container Runner Backend."""
 
 import logging
 import os
@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Kokoko Container Runner", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Kuboco Container Runner", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -149,7 +149,7 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
         status_code=201,
     )
     response.set_cookie(
-        key="kokoko_token",
+        key="kuboco_token",
         value=token,
         httponly=True,
         samesite="lax",
@@ -170,7 +170,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     token = create_access_token(user.id)
     response = JSONResponse({"id": user.id, "username": user.username, "access_token": token})
     response.set_cookie(
-        key="kokoko_token",
+        key="kuboco_token",
         value=token,
         httponly=True,
         samesite="lax",
@@ -182,7 +182,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 @app.post("/api/auth/logout")
 async def logout():
     response = JSONResponse({"message": "Logged out"})
-    response.delete_cookie("kokoko_token")
+    response.delete_cookie("kuboco_token")
     return response
 
 

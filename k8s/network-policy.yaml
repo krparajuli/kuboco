@@ -1,34 +1,34 @@
-# Deny all ingress to every pod in kokoko-containers by default.
+# Deny all ingress to every pod in kuboco-containers by default.
 # This ensures user pods are only reachable through the backend proxy.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: deny-all-ingress
-  namespace: kokoko-containers
+  namespace: kuboco-containers
 spec:
   podSelector: {}
   policyTypes:
     - Ingress
 ---
-# Allow all TCP ingress from backend pods in the "kokoko" namespace.
+# Allow all TCP ingress from backend pods in the "kuboco" namespace.
 # No port restriction — supports the arbitrary port proxy feature.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-from-backend
-  namespace: kokoko-containers
+  namespace: kuboco-containers
 spec:
   podSelector:
     matchLabels:
-      app: kokoko-container
+      app: kuboco-container
   policyTypes:
     - Ingress
   ingress:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: kokoko
+              kubernetes.io/metadata.name: kuboco
           podSelector:
             matchLabels:
-              app: kokoko-backend
+              app: kuboco-backend
       # Omitting "ports" allows ALL TCP ports from the backend

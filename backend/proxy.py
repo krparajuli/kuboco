@@ -118,11 +118,15 @@ async def proxy_port_websocket(
     path: str,
 ) -> None:
     """Proxy browser ↔ pod WebSocket on an arbitrary port."""
-    from backend.k8s_controller import get_svc_dns
+    from backend.k8s_controller import get_pod_ip
 
-    svc_dns = get_svc_dns(container.user_id, container.id)
+    pod_ip = await get_pod_ip(container.user_id, container.id)
+    if not pod_ip:
+        await browser_ws.close(code=1011, reason="Pod IP not available")
+        return
+
     clean_path = path.lstrip("/")
-    target_url = f"ws://{svc_dns}:{port}/{clean_path}"
+    target_url = f"ws://{pod_ip}:{port}/{clean_path}"
 
     # Forward whatever subprotocols the browser requested
     requested_subprotocols = browser_ws.headers.get("sec-websocket-protocol", "")
@@ -161,11 +165,19 @@ async def proxy_http_request(
     path: str,
 ) -> Response:
     """Forward an HTTP request to a port on the user's pod."""
-    from backend.k8s_controller import get_svc_dns
+    from backend.k8s_controller import get_pod_ip
 
-    svc_dns = get_svc_dns(container.user_id, container.id)
+    pod_ip = await get_pod_ip(container.user_id, container.id)
+    if not pod_ip:
+        return Response(
+            content=b"<html><body><h2>Pod not available</h2>"
+                    b"<p>Could not resolve pod IP address.</p></body></html>",
+            status_code=502,
+            media_type="text/html",
+        )
+
     clean_path = path.lstrip("/")
-    target_url = f"http://{svc_dns}:{port}/{clean_path}"
+    target_url = f"http://{pod_ip}:{port}/{clean_path}"
     if request.url.query:
         target_url += f"?{request.url.query}"
 
@@ -176,7 +188,7 @@ async def proxy_http_request(
         for k, v in request.headers.items()
         if k.lower() not in _HOP_BY_HOP
     }
-    fwd_headers["host"] = f"{svc_dns}:{port}"
+    fwd_headers["host"] = f"{pod_ip}:{port}"
     fwd_headers["x-forwarded-for"] = request.client.host if request.client else "unknown"
     fwd_headers["x-forwarded-host"] = request.headers.get("host", "")
 

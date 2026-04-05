@@ -27,10 +27,10 @@ services:
       # Kubeconfig for cluster access (read-only)
       - ${HOME}/.kube:/root/.kube:ro
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:////app/data/kokoko.db
-      - CONTAINER_NAMESPACE=kokoko-containers
-      - BACKEND_NAMESPACE=kokoko
-      - CONTAINER_IMAGE=kokoko/ubuntu-ttyd:latest
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/kuboco.db
+      - CONTAINER_NAMESPACE=kuboco-containers
+      - BACKEND_NAMESPACE=kuboco
+      - CONTAINER_IMAGE=kuboco/ubuntu-ttyd:latest
       - TTYD_PORT=7681
       - MAX_CONTAINERS_PER_USER=5
       # Override in .env or here:

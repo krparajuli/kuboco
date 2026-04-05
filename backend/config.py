@@ -9,12 +9,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24  # 24 hours
 
     # Database
-    database_url: str = "sqlite+aiosqlite:///./kokoko.db"
+    database_url: str = "sqlite+aiosqlite:///./kuboco.db"
 
     # Kubernetes
-    container_image: str = "kokoko/ubuntu-ttyd:latest"
-    container_namespace: str = "kokoko-containers"
-    backend_namespace: str = "kokoko"
+    container_image: str = "kuboco/ubuntu-ttyd:latest"
+    container_namespace: str = "kuboco-containers"
+    backend_namespace: str = "kuboco"
     pod_cpu_limit: str = "1"
     pod_memory_limit: str = "1Gi"
     pod_cpu_request: str = "100m"

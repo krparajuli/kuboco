@@ -1,16 +1,16 @@
-# ServiceAccount for the Kokoko backend, running in the "kokoko" namespace
+# ServiceAccount for the Kuboco backend, running in the "kuboco" namespace
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kokoko-backend
-  namespace: kokoko
+  name: kuboco-backend
+  namespace: kuboco
 ---
-# Role scoped to "kokoko-containers" — least privilege, no cluster-wide access
+# Role scoped to "kuboco-containers" — least privilege, no cluster-wide access
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: kokoko-container-manager
-  namespace: kokoko-containers
+  name: kuboco-container-manager
+  namespace: kuboco-containers
 rules:
   - apiGroups: [""]
     resources: ["pods", "pods/status", "pods/log"]
@@ -19,17 +19,17 @@ rules:
     resources: ["services"]
     verbs: ["create", "get", "list", "delete"]
 ---
-# Bind the SA in "kokoko" to the Role in "kokoko-containers"
+# Bind the SA in "kuboco" to the Role in "kuboco-containers"
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: kokoko-backend-binding
-  namespace: kokoko-containers
+  name: kuboco-backend-binding
+  namespace: kuboco-containers
 subjects:
   - kind: ServiceAccount
-    name: kokoko-backend
-    namespace: kokoko
+    name: kuboco-backend
+    namespace: kuboco
 roleRef:
   kind: Role
-  name: kokoko-container-manager
+  name: kuboco-container-manager
   apiGroup: rbac.authorization.k8s.io

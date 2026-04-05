@@ -17,16 +17,16 @@ logger = logging.getLogger(__name__)
 
 
 def _pod_name(user_id: int, container_id: int) -> str:
-    return f"kokoko-{user_id}-{container_id}"
+    return f"kuboco-{user_id}-{container_id}"
 
 
 def _svc_name(user_id: int, container_id: int) -> str:
-    return f"kokoko-svc-{user_id}-{container_id}"
+    return f"kuboco-svc-{user_id}-{container_id}"
 
 
 def get_svc_dns(user_id: int, container_id: int) -> str:
     return (
-        f"kokoko-svc-{user_id}-{container_id}"
+        f"kuboco-svc-{user_id}-{container_id}"
         f".{settings.container_namespace}.svc.cluster.local"
     )
 
@@ -59,7 +59,7 @@ def _build_pod(
     namespace: str,
 ) -> client.V1Pod:
     labels = {
-        "app": "kokoko-container",
+        "app": "kuboco-container",
         "user-id": str(user_id),
         "container-id": str(container_id),
         "pod-name": pod_name,
@@ -114,7 +114,7 @@ def _build_service(
             name=svc_name,
             namespace=namespace,
             labels={
-                "app": "kokoko-container",
+                "app": "kuboco-container",
                 "svc-name": svc_name,
             },
         ),

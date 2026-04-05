@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: kokoko-config
-  namespace: kokoko
+  name: kuboco-config
+  namespace: kuboco
 data:
-  CONTAINER_NAMESPACE: "kokoko-containers"
-  BACKEND_NAMESPACE:   "kokoko"
-  CONTAINER_IMAGE:     "kokoko/ubuntu-ttyd:latest"
-  DATABASE_URL:        "sqlite+aiosqlite:////app/data/kokoko.db"
+  CONTAINER_NAMESPACE: "kuboco-containers"
+  BACKEND_NAMESPACE:   "kuboco"
+  CONTAINER_IMAGE:     "kuboco/ubuntu-ttyd:latest"
+  DATABASE_URL:        "sqlite+aiosqlite:////app/data/kuboco.db"
   TTYD_PORT:           "7681"
   MAX_CONTAINERS_PER_USER: "5"
 ---
@@ -16,8 +16,8 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: kokoko-secrets
-  namespace: kokoko
+  name: kuboco-secrets
+  namespace: kuboco
 type: Opaque
 stringData:
   SECRET_KEY: "CHANGE-ME-generate-with-openssl-rand-hex-32"
@@ -27,8 +27,8 @@ stringData:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: kokoko-db-pvc
-  namespace: kokoko
+  name: kuboco-db-pvc
+  namespace: kuboco
 spec:
   accessModes:
     - ReadWriteOnce
@@ -39,24 +39,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kokoko-backend
-  namespace: kokoko
+  name: kuboco-backend
+  namespace: kuboco
   labels:
-    app: kokoko-backend
+    app: kuboco-backend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kokoko-backend
+      app: kuboco-backend
   template:
     metadata:
       labels:
-        app: kokoko-backend
+        app: kuboco-backend
     spec:
-      serviceAccountName: kokoko-backend
+      serviceAccountName: kuboco-backend
       containers:
         - name: backend
-          image: kokoko/backend:latest
+          image: kuboco/backend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -64,9 +64,9 @@ spec:
               protocol: TCP
           envFrom:
             - configMapRef:
-                name: kokoko-config
+                name: kuboco-config
             - secretRef:
-                name: kokoko-secrets
+                name: kuboco-secrets
           volumeMounts:
             - name: db-storage
               mountPath: /app/data
@@ -93,19 +93,19 @@ spec:
       volumes:
         - name: db-storage
           persistentVolumeClaim:
-            claimName: kokoko-db-pvc
+            claimName: kuboco-db-pvc
 ---
 # NodePort Service — accessible via <NodeIP>:30080
 apiVersion: v1
 kind: Service
 metadata:
-  name: kokoko-backend-svc
-  namespace: kokoko
+  name: kuboco-backend-svc
+  namespace: kuboco
   labels:
-    app: kokoko-backend
+    app: kuboco-backend
 spec:
   selector:
-    app: kokoko-backend
+    app: kuboco-backend
   ports:
     - name: http
       port: 80

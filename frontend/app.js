@@ -46,18 +46,18 @@ class APIError extends Error {
 
 const Session = {
   set(user, token) {
-    sessionStorage.setItem('kokoko_user', JSON.stringify(user));
-    sessionStorage.setItem('kokoko_token', token);
+    sessionStorage.setItem('kuboco_user', JSON.stringify(user));
+    sessionStorage.setItem('kuboco_token', token);
   },
   clear() {
-    sessionStorage.removeItem('kokoko_user');
-    sessionStorage.removeItem('kokoko_token');
+    sessionStorage.removeItem('kuboco_user');
+    sessionStorage.removeItem('kuboco_token');
   },
   getUser() {
-    try { return JSON.parse(sessionStorage.getItem('kokoko_user')); } catch { return null; }
+    try { return JSON.parse(sessionStorage.getItem('kuboco_user')); } catch { return null; }
   },
   getToken() {
-    return sessionStorage.getItem('kokoko_token') || '';
+    return sessionStorage.getItem('kuboco_token') || '';
   },
 };
 
@@ -126,18 +126,22 @@ const TerminalMgr = {
     };
 
     this.socket.onmessage = (event) => {
+      // ttyd frames: first byte/char is the command type ('0'=data, '1'=title, '2'=prefs)
+      let cmd, payload;
       if (event.data instanceof ArrayBuffer) {
-        // Binary messages: write directly
-        this.term.write(new Uint8Array(event.data));
-        return;
+        const arr = new Uint8Array(event.data);
+        cmd     = String.fromCharCode(arr[0]);
+        payload = arr.slice(1);
+      } else {
+        cmd     = event.data[0];
+        payload = event.data.slice(1);
       }
-      // Text messages: first char = command type
-      const cmd  = event.data[0];
-      const data = event.data.slice(1);
+
       if (cmd === '0') {
-        this.term.write(data);
+        this.term.write(payload);
       } else if (cmd === '1') {
-        document.title = `${data || 'shell'} — Kokoko`;
+        const title = typeof payload === 'string' ? payload : new TextDecoder().decode(payload);
+        document.title = `${title || 'shell'} — Kuboco`;
       }
       // cmd '2' = preferences JSON (ignored)
     };
@@ -178,7 +182,7 @@ const TerminalMgr = {
     if (this.socket)          { this.socket.close(); this.socket = null; }
     if (this.term)            { this.term.dispose(); this.term = null; }
     this.fitAddon = null;
-    document.title = 'Kokoko';
+    document.title = 'Kuboco';
   },
 };
 
@@ -210,7 +214,7 @@ function renderAuth(mode) {
     <div class="auth-wrapper">
       <div class="auth-card">
         <div class="text-center mb-4">
-          <div class="auth-logo">KOKOKO</div>
+          <div class="auth-logo">KUBOCO</div>
           <div class="auth-tagline">Kubernetes Container Runner</div>
         </div>
         <div id="auth-error" class="alert alert-danger d-none" role="alert"></div>
@@ -308,7 +312,7 @@ async function renderDashboard() {
             <div class="mb-1">
               <label for="container-image" class="form-label fw-semibold">Image <span class="text-secondary fw-normal">(optional)</span></label>
               <input type="text" id="container-image" class="form-control bg-dark border-secondary text-light"
-                placeholder="Default: kokoko/ubuntu-ttyd:latest" />
+                placeholder="Default: kuboco/ubuntu-ttyd:latest" />
             </div>
           </div>
           <div class="modal-footer border-secondary">
@@ -595,7 +599,7 @@ function navbar(user, view, containerId) {
   return `
     <nav class="navbar navbar-expand navbar-dark border-bottom border-secondary px-3" style="background:#161b22; height:56px">
       <a class="navbar-brand py-0" href="#/dashboard">
-        <span>KOKOKO</span>
+        <span>KUBOCO</span>
       </a>
       <div class="navbar-nav ms-3">
         ${view === 'container' && containerId ? `

@@ -6,10 +6,10 @@ cd "$SCRIPT_DIR"
 
 # ── Colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
-info()    { echo -e "${CYAN}[kokoko]${NC} $*"; }
-success() { echo -e "${GREEN}[kokoko]${NC} $*"; }
-warn()    { echo -e "${YELLOW}[kokoko]${NC} $*"; }
-die()     { echo -e "${RED}[kokoko] ERROR:${NC} $*" >&2; exit 1; }
+info()    { echo -e "${CYAN}[kuboco]${NC} $*"; }
+success() { echo -e "${GREEN}[kuboco]${NC} $*"; }
+warn()    { echo -e "${YELLOW}[kuboco]${NC} $*"; }
+die()     { echo -e "${RED}[kuboco] ERROR:${NC} $*" >&2; exit 1; }
 
 # ── Preflight checks ─────────────────────────────────────────────────────────
 check_cmd() { command -v "$1" &>/dev/null || die "'$1' not found. Please install it first."; }
@@ -36,38 +36,49 @@ else
     info ".env already exists, skipping."
 fi
 
-# ── Build container images ───────────────────────────────────────────────────
-info "Building ttyd container image (kokoko/ubuntu-ttyd:latest)…"
-docker build -t kokoko/ubuntu-ttyd:latest ./container/
-success "ttyd image built."
-
-info "Building backend image (kokoko/backend:latest)…"
-docker build -t kokoko/backend:latest .
-success "Backend image built."
-
-# ── Load images into local cluster (kind / k3d) ───────────────────────────────
+# ── Detect cluster type ───────────────────────────────────────────────────────
 CONTEXT=$(kubectl config current-context 2>/dev/null || echo "")
 
-load_image() {
-    local img="$1"
+IS_MINIKUBE=false
+command -v minikube &>/dev/null && minikube status &>/dev/null && IS_MINIKUBE=true
+
+# ── Build + load container images ────────────────────────────────────────────
+# For minikube: build directly into its daemon (avoids load step entirely).
+# For kind/k3d: build locally then load. For others: build locally only.
+
+if [[ "$IS_MINIKUBE" == "true" ]]; then
+    info "Building ttyd container image directly in minikube (kuboco/ubuntu-ttyd:latest)…"
+    minikube image build -t kuboco/ubuntu-ttyd:latest ./container/
+    success "ttyd image built."
+
+    info "Building backend image directly in minikube (kuboco/backend:latest)…"
+    minikube image build -t kuboco/backend:latest .
+    success "Backend image built."
+else
+    info "Building ttyd container image (kuboco/ubuntu-ttyd:latest)…"
+    docker build -t kuboco/ubuntu-ttyd:latest ./container/
+    success "ttyd image built."
+
+    info "Building backend image (kuboco/backend:latest)…"
+    docker build -t kuboco/backend:latest .
+    success "Backend image built."
+
     if [[ "$CONTEXT" == kind-* ]]; then
         CLUSTER="${CONTEXT#kind-}"
-        info "Loading ${img} into kind cluster '${CLUSTER}'…"
-        kind load docker-image "$img" --name "$CLUSTER"
+        info "Loading images into kind cluster '${CLUSTER}'…"
+        kind load docker-image kuboco/ubuntu-ttyd:latest --name "$CLUSTER"
+        kind load docker-image kuboco/backend:latest --name "$CLUSTER"
     elif [[ "$CONTEXT" == k3d-* ]]; then
         CLUSTER="${CONTEXT#k3d-}"
-        info "Loading ${img} into k3d cluster '${CLUSTER}'…"
-        k3d image import "$img" --cluster "$CLUSTER"
+        info "Loading images into k3d cluster '${CLUSTER}'…"
+        k3d image import kuboco/ubuntu-ttyd:latest kuboco/backend:latest --cluster "$CLUSTER"
     else
-        warn "Context '${CONTEXT}' is not kind/k3d — skipping image load."
+        warn "Context '${CONTEXT}' is not kind/k3d/minikube — skipping image load."
         warn "Push the images to a registry your cluster can pull from:"
-        warn "  docker push kokoko/ubuntu-ttyd:latest"
-        warn "  docker push kokoko/backend:latest"
+        warn "  docker push kuboco/ubuntu-ttyd:latest"
+        warn "  docker push kuboco/backend:latest"
     fi
-}
-
-load_image kokoko/ubuntu-ttyd:latest
-load_image kokoko/backend:latest
+fi
 
 # ── Apply Kubernetes manifests ───────────────────────────────────────────────
 info "Applying Kubernetes manifests…"
@@ -80,22 +91,26 @@ kubectl apply -f k8s/network-policy.yaml
 SECRET_KEY_VAL=$(grep '^SECRET_KEY=' .env | cut -d= -f2-)
 if [[ -n "$SECRET_KEY_VAL" ]]; then
     info "Patching SECRET_KEY into k8s Secret…"
-    kubectl create secret generic kokoko-secrets \
-        --namespace=kokoko \
+    kubectl create secret generic kuboco-secrets \
+        --namespace=kuboco \
         --from-literal=SECRET_KEY="$SECRET_KEY_VAL" \
         --dry-run=client -o yaml | kubectl apply -f -
 fi
 
 kubectl apply -f k8s/backend.yaml
 
+# ── Force restart so pods pick up the freshly-built image ────────────────────
+info "Restarting backend deployment…"
+kubectl rollout restart deployment/kuboco-backend -n kuboco
+
 # ── Wait for backend to be ready ─────────────────────────────────────────────
 info "Waiting for backend deployment to roll out…"
-kubectl rollout status deployment/kokoko-backend -n kokoko --timeout=120s
+kubectl rollout status deployment/kuboco-backend -n kuboco --timeout=120s
 success "Backend is running."
 
 # ── Expose the UI ─────────────────────────────────────────────────────────────
 echo ""
-success "Kokoko is ready!"
+success "Kuboco is ready!"
 echo ""
 
 # Resolve the best URL to reach the UI
@@ -103,13 +118,13 @@ NODE_URL=""
 if [[ "$CONTEXT" == kind-* ]]; then
     # kind exposes NodePort via localhost (port-forward is easier)
     info "Starting port-forward for kind cluster (background)…"
-    kubectl port-forward -n kokoko svc/kokoko-backend-svc 8000:80 &>/dev/null &
+    kubectl port-forward -n kuboco svc/kuboco-backend-svc 8000:80 &>/dev/null &
     PF_PID=$!
     echo -e "  Port-forward PID: ${PF_PID} (kill to stop)"
     NODE_URL="http://localhost:8000"
 elif [[ "$CONTEXT" == k3d-* ]]; then
     info "Starting port-forward for k3d cluster (background)…"
-    kubectl port-forward -n kokoko svc/kokoko-backend-svc 8000:80 &>/dev/null &
+    kubectl port-forward -n kuboco svc/kuboco-backend-svc 8000:80 &>/dev/null &
     PF_PID=$!
     echo -e "  Port-forward PID: ${PF_PID} (kill to stop)"
     NODE_URL="http://localhost:8000"
@@ -143,6 +158,6 @@ echo -e "  ${CYAN}Dev mode (hot-reload via docker-compose):${NC}"
 echo -e "    docker-compose up"
 echo ""
 echo -e "  ${CYAN}Useful commands:${NC}"
-echo -e "    kubectl get pods -n kokoko"
-echo -e "    kubectl get pods -n kokoko-containers"
-echo -e "    kubectl logs -n kokoko -l app=kokoko-backend -f"
+echo -e "    kubectl get pods -n kuboco"
+echo -e "    kubectl get pods -n kuboco-containers"
+echo -e "    kubectl logs -n kuboco -l app=kuboco-backend -f"
