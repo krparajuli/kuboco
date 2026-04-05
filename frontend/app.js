@@ -681,4 +681,7 @@ async function route() {
 }
 
 window.addEventListener('hashchange', route);
+
+// Expose for testing/debugging
+window._TerminalMgr = TerminalMgr;
 window.addEventListener('load', route);
