@@ -13,6 +13,10 @@ class Settings(BaseSettings):
 
     # Kubernetes
     container_image: str = "kuboco/ubuntu-ttyd:latest"
+    allowed_images: list[str] = [
+        "kuboco/ubuntu-ttyd:latest",
+        "kuboco/ironclaude:latest",
+    ]
     container_namespace: str = "kuboco-containers"
     backend_namespace: str = "kuboco"
     pod_cpu_limit: str = "1"

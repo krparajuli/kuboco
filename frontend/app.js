@@ -28,6 +28,7 @@ const API = {
   logout:      ()                    => API._req('POST', '/auth/logout'),
   me:          ()                    => API._req('GET',  '/auth/me'),
   getContainers: ()                  => API._req('GET',  '/containers'),
+  getImages:     ()                  => API._req('GET',  '/images'),
   createContainer: (name, image)     => API._req('POST', '/containers', { name, image: image || undefined }),
   getContainer:  id                  => API._req('GET',  `/containers/${id}`),
   deleteContainer: id                => API._req('DELETE', `/containers/${id}`),
@@ -310,9 +311,12 @@ async function renderDashboard() {
               <div class="form-text text-secondary">Lowercase letters, numbers, hyphens (2-32 chars)</div>
             </div>
             <div class="mb-1">
-              <label for="container-image" class="form-label fw-semibold">Image <span class="text-secondary fw-normal">(optional)</span></label>
-              <input type="text" id="container-image" class="form-control bg-dark border-secondary text-light"
-                placeholder="Default: kuboco/ubuntu-ttyd:latest" />
+              <label for="container-image" class="form-label fw-semibold">Image</label>
+              <select id="container-image"
+                      class="form-select bg-dark border-secondary text-light">
+                <option value="" disabled selected>Loading…</option>
+              </select>
+              <div id="image-desc" class="form-text text-secondary mt-1"></div>
             </div>
           </div>
           <div class="modal-footer border-secondary">
@@ -330,9 +334,41 @@ async function renderDashboard() {
   // Poll for status updates every 5 seconds
   _dashboardPoll = setInterval(loadContainerList, 5000);
 
-  document.getElementById('new-container-btn').addEventListener('click', () => {
+  // Descriptions shown below the select for each image
+  const _imageDescs = {
+    'ubuntu-ttyd':  'Ubuntu 22.04 — bash, python3, vim, common utilities',
+    'ironclaude':   'Ubuntu 22.04 — Claude Code, Go, Rust, Node.js, Python3, Zellij',
+  };
+
+  // Populate the image select once (cached after first open)
+  let _imagesLoaded = false;
+  async function _loadImages() {
+    if (_imagesLoaded) return;
+    const sel  = document.getElementById('container-image');
+    const desc = document.getElementById('image-desc');
+    if (!sel) return;
+    try {
+      const images = await API.getImages();
+      sel.innerHTML = images.map(i =>
+        `<option value="${escHtml(i.image)}"${i.default ? ' selected' : ''}>${escHtml(i.label)}</option>`
+      ).join('');
+      _imagesLoaded = true;
+      // Show description for whichever option is selected
+      const updateDesc = () => {
+        const chosen = sel.options[sel.selectedIndex];
+        if (desc && chosen) desc.textContent = _imageDescs[chosen.text] || '';
+      };
+      sel.addEventListener('change', updateDesc);
+      updateDesc();
+    } catch {
+      if (sel) sel.innerHTML = '<option value="" disabled selected>Failed to load images</option>';
+    }
+  }
+
+  document.getElementById('new-container-btn').addEventListener('click', async () => {
     const modal = new bootstrap.Modal(document.getElementById('new-container-modal'));
     modal.show();
+    await _loadImages();
   });
 
   document.getElementById('create-container-btn').addEventListener('click', async () => {
@@ -342,7 +378,7 @@ async function renderDashboard() {
     const btn     = document.getElementById('create-container-btn');
 
     const name  = nameEl.value.trim().toLowerCase();
-    const image = imageEl.value.trim() || null;
+    const image = imageEl ? imageEl.value : null;
 
     if (!name) { nameEl.focus(); return; }
 
@@ -354,7 +390,8 @@ async function renderDashboard() {
       await API.createContainer(name, image);
       bootstrap.Modal.getInstance(document.getElementById('new-container-modal')).hide();
       nameEl.value = '';
-      imageEl.value = '';
+      const sel = document.getElementById('container-image');
+      if (sel) sel.selectedIndex = 0;
       await loadContainerList();
     } catch (err) {
       errEl.textContent = err.message;

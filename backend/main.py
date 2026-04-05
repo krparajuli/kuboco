@@ -129,6 +129,23 @@ async def healthz():
 
 
 # --------------------------------------------------------------------------- #
+# Images
+# --------------------------------------------------------------------------- #
+
+@app.get("/api/images")
+async def list_images(current_user: User = Depends(get_current_user)):
+    """Return the allowed container images with a human-readable label."""
+    def _label(img: str) -> str:
+        # "kuboco/ubuntu-ttyd:latest" → "ubuntu-ttyd"
+        return img.split("/")[-1].split(":")[0]
+
+    return [
+        {"image": img, "label": _label(img), "default": img == settings.container_image}
+        for img in settings.allowed_images
+    ]
+
+
+# --------------------------------------------------------------------------- #
 # Auth routes
 # --------------------------------------------------------------------------- #
 
@@ -238,6 +255,11 @@ async def create_container(
         )
 
     image = req.image or settings.container_image
+    if image not in settings.allowed_images:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image not permitted. Allowed: {', '.join(settings.allowed_images)}",
+        )
     container = Container(
         user_id=current_user.id,
         name=req.name,

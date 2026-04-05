@@ -47,17 +47,21 @@ command -v minikube &>/dev/null && minikube status &>/dev/null && IS_MINIKUBE=tr
 # For kind/k3d: build locally then load. For others: build locally only.
 
 if [[ "$IS_MINIKUBE" == "true" ]]; then
-    info "Building ttyd container image directly in minikube (kuboco/ubuntu-ttyd:latest)…"
-    minikube image build -t kuboco/ubuntu-ttyd:latest ./container/
-    success "ttyd image built."
+    info "Building container images directly in minikube…"
+    minikube image build -t kuboco/ubuntu-ttyd:latest ./container/default-mini/
+    success "ubuntu-ttyd image built."
+    minikube image build -t kuboco/ironclaude:latest  ./container/ironclaude/
+    success "ironclaude image built."
 
     info "Building backend image directly in minikube (kuboco/backend:latest)…"
     minikube image build -t kuboco/backend:latest .
     success "Backend image built."
 else
-    info "Building ttyd container image (kuboco/ubuntu-ttyd:latest)…"
-    docker build -t kuboco/ubuntu-ttyd:latest ./container/
-    success "ttyd image built."
+    info "Building container images…"
+    docker build -t kuboco/ubuntu-ttyd:latest ./container/default-mini/
+    success "ubuntu-ttyd image built."
+    docker build -t kuboco/ironclaude:latest  ./container/ironclaude/
+    success "ironclaude image built."
 
     info "Building backend image (kuboco/backend:latest)…"
     docker build -t kuboco/backend:latest .
@@ -67,15 +71,17 @@ else
         CLUSTER="${CONTEXT#kind-}"
         info "Loading images into kind cluster '${CLUSTER}'…"
         kind load docker-image kuboco/ubuntu-ttyd:latest --name "$CLUSTER"
-        kind load docker-image kuboco/backend:latest --name "$CLUSTER"
+        kind load docker-image kuboco/ironclaude:latest  --name "$CLUSTER"
+        kind load docker-image kuboco/backend:latest     --name "$CLUSTER"
     elif [[ "$CONTEXT" == k3d-* ]]; then
         CLUSTER="${CONTEXT#k3d-}"
         info "Loading images into k3d cluster '${CLUSTER}'…"
-        k3d image import kuboco/ubuntu-ttyd:latest kuboco/backend:latest --cluster "$CLUSTER"
+        k3d image import kuboco/ubuntu-ttyd:latest kuboco/ironclaude:latest kuboco/backend:latest --cluster "$CLUSTER"
     else
         warn "Context '${CONTEXT}' is not kind/k3d/minikube — skipping image load."
         warn "Push the images to a registry your cluster can pull from:"
         warn "  docker push kuboco/ubuntu-ttyd:latest"
+        warn "  docker push kuboco/ironclaude:latest"
         warn "  docker push kuboco/backend:latest"
     fi
 fi
