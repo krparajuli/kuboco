@@ -91,7 +91,7 @@ async def proxy_terminal_websocket(
     """Proxy browser ↔ pod ttyd WebSocket (subprotocol: tty)."""
     from backend.k8s_controller import get_svc_dns
 
-    svc_dns = get_svc_dns(container.user_id, container.id)
+    svc_dns = get_svc_dns(container.user_id, container.id, container.namespace)
     target_url = f"ws://{svc_dns}:{settings.ttyd_port}/ws"
 
     try:
@@ -120,7 +120,7 @@ async def proxy_port_websocket(
     """Proxy browser ↔ pod WebSocket on an arbitrary port."""
     from backend.k8s_controller import get_pod_ip
 
-    pod_ip = await get_pod_ip(container.user_id, container.id)
+    pod_ip = await get_pod_ip(container.user_id, container.id, container.namespace)
     if not pod_ip:
         await browser_ws.close(code=1011, reason="Pod IP not available")
         return
@@ -167,7 +167,7 @@ async def proxy_http_request(
     """Forward an HTTP request to a port on the user's pod."""
     from backend.k8s_controller import get_pod_ip
 
-    pod_ip = await get_pod_ip(container.user_id, container.id)
+    pod_ip = await get_pod_ip(container.user_id, container.id, container.namespace)
     if not pod_ip:
         return Response(
             content=b"<html><body><h2>Pod not available</h2>"

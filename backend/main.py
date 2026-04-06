@@ -265,7 +265,7 @@ async def create_container(
         name=req.name,
         pod_name="",
         svc_name="",
-        namespace=settings.container_namespace,
+        namespace="",
         status="pending",
         image=image,
     )
@@ -275,13 +275,14 @@ async def create_container(
     from backend import k8s_controller as k8s
 
     try:
-        pod_name, svc_name = await k8s.create_pod_and_service(
+        pod_name, svc_name, namespace = await k8s.create_pod_and_service(
             user_id=current_user.id,
             container_id=container.id,
             image=image,
         )
         container.pod_name = pod_name
         container.svc_name = svc_name
+        container.namespace = namespace
         container.status = "starting"
     except Exception as exc:
         container.status = "error"
@@ -307,7 +308,7 @@ async def get_container(
         from backend import k8s_controller as k8s
 
         try:
-            live = await k8s.get_pod_status(current_user.id, container.id)
+            live = await k8s.get_pod_status(current_user.id, container.id, container.namespace)
             if live != container.status:
                 container.status = live
                 if live == "stopped":
@@ -331,7 +332,7 @@ async def delete_container(
         from backend import k8s_controller as k8s
 
         try:
-            await k8s.delete_pod_and_service(current_user.id, container.id)
+            await k8s.delete_pod_and_service(current_user.id, container.id, container.namespace)
         except Exception as exc:
             logger.error("Failed to delete k8s resources for container %d: %s", container.id, exc)
             raise HTTPException(status_code=500, detail=f"Failed to delete container: {exc}")

@@ -1,34 +1,9 @@
-# Deny all ingress to every pod in kuboco-containers by default.
-# This ensures user pods are only reachable through the backend proxy.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: deny-all-ingress
-  namespace: kuboco-containers
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
----
-# Allow all TCP ingress from backend pods in the "kuboco" namespace.
-# No port restriction — supports the arbitrary port proxy feature.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-from-backend
-  namespace: kuboco-containers
-spec:
-  podSelector:
-    matchLabels:
-      app: kuboco-container
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kuboco
-          podSelector:
-            matchLabels:
-              app: kuboco-backend
-      # Omitting "ports" allows ALL TCP ports from the backend
+# NetworkPolicies are applied dynamically per-user-namespace by the backend
+# (k8s_controller._sync_ensure_user_namespace) when a user first spawns a container.
+#
+# Each kuboco-user-{id} namespace gets:
+#   deny-all-ingress  — blocks all pod ingress by default
+#   allow-from-backend — permits ingress only from kuboco-backend pods in the kuboco ns
+#
+# This file is kept for reference. The backend creates equivalent policies via
+# the Kubernetes Python client, so there is nothing to kubectl-apply here.
