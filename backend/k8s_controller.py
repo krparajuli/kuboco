@@ -2,6 +2,10 @@
 
 All kubernetes API calls use the synchronous client wrapped in asyncio.to_thread
 to avoid blocking the FastAPI event loop.
+
+Each user gets an isolated namespace: kuboco-user-{user_id}.  The namespace
+(plus its NetworkPolicies) is created on-demand the first time a container is
+spawned for that user.
 """
 
 import asyncio
@@ -28,10 +32,14 @@ def _netpol_name(user_id: int, container_id: int) -> str:
     return f"kuboco-netpol-{user_id}-{container_id}"
 
 
-def get_svc_dns(user_id: int, container_id: int) -> str:
+def _user_namespace(user_id: int) -> str:
+    return f"kuboco-user-{user_id}"
+
+
+def get_svc_dns(user_id: int, container_id: int, namespace: str) -> str:
     return (
         f"kuboco-svc-{user_id}-{container_id}"
-        f".{settings.container_namespace}.svc.cluster.local"
+        f".{namespace}.svc.cluster.local"
     )
 
 
@@ -60,6 +68,11 @@ def _get_custom_api() -> client.CustomObjectsApi:
     return client.CustomObjectsApi()
 
 
+def _get_networking_v1() -> client.NetworkingV1Api:
+    _load_k8s_config()
+    return client.NetworkingV1Api()
+
+
 def _build_cilium_netpol(
     netpol_name: str,
     pod_name: str,
@@ -69,7 +82,8 @@ def _build_cilium_netpol(
     """Build a CiliumNetworkPolicy manifest for a pod.
 
     Egress: allow everything except the explicitly denied FQDNs.
-    Ingress: allow all (or deny all when ingress_allow_all=False).
+    Ingress is controlled at the namespace level by the deny-all-ingress and
+    allow-from-backend standard NetworkPolicies, so no ingress rules are set here.
     """
     spec: dict = {
         "endpointSelector": {"matchLabels": {"pod-name": pod_name}},
@@ -82,10 +96,6 @@ def _build_cilium_netpol(
             for fqdn in policy.egress_deny_fqdns
         ]
         spec["egressDeny"] = [{"toFQDNs": to_fqdns}]
-
-    if policy.ingress_allow_all:
-        spec["ingress"] = [{}]
-    # ingress_allow_all=False → omit ingress → Cilium denies all ingress
 
     return {
         "apiVersion": "cilium.io/v2",
@@ -178,6 +188,91 @@ def _build_service(
 
 
 # --------------------------------------------------------------------------- #
+# Namespace bootstrap
+# --------------------------------------------------------------------------- #
+
+def _sync_ensure_user_namespace(user_id: int) -> str:
+    """Create the per-user namespace and its NetworkPolicies if they don't exist.
+
+    Returns the namespace name.  Safe to call repeatedly — 409 Conflict errors
+    are silently ignored.
+    """
+    ns_name = _user_namespace(user_id)
+    v1 = _get_v1()
+    net_v1 = _get_networking_v1()
+
+    # 1. Create the namespace
+    try:
+        v1.create_namespace(
+            body=client.V1Namespace(
+                metadata=client.V1ObjectMeta(
+                    name=ns_name,
+                    labels={
+                        "kubernetes.io/metadata.name": ns_name,
+                        "kuboco-user-id": str(user_id),
+                    },
+                )
+            )
+        )
+        logger.info("Created namespace %s", ns_name)
+    except ApiException as exc:
+        if exc.status != 409:
+            raise
+
+    # 2. Deny-all ingress
+    try:
+        net_v1.create_namespaced_network_policy(
+            namespace=ns_name,
+            body=client.V1NetworkPolicy(
+                metadata=client.V1ObjectMeta(name="deny-all-ingress", namespace=ns_name),
+                spec=client.V1NetworkPolicySpec(
+                    pod_selector=client.V1LabelSelector(),
+                    policy_types=["Ingress"],
+                ),
+            ),
+        )
+    except ApiException as exc:
+        if exc.status != 409:
+            raise
+
+    # 3. Allow ingress from backend pods in the "kuboco" namespace
+    try:
+        net_v1.create_namespaced_network_policy(
+            namespace=ns_name,
+            body=client.V1NetworkPolicy(
+                metadata=client.V1ObjectMeta(name="allow-from-backend", namespace=ns_name),
+                spec=client.V1NetworkPolicySpec(
+                    pod_selector=client.V1LabelSelector(
+                        match_labels={"app": "kuboco-container"}
+                    ),
+                    policy_types=["Ingress"],
+                    ingress=[
+                        client.V1NetworkPolicyIngressRule(
+                            _from=[
+                                client.V1NetworkPolicyPeer(
+                                    namespace_selector=client.V1LabelSelector(
+                                        match_labels={
+                                            "kubernetes.io/metadata.name": "kuboco"
+                                        }
+                                    ),
+                                    pod_selector=client.V1LabelSelector(
+                                        match_labels={"app": "kuboco-backend"}
+                                    ),
+                                )
+                            ]
+                        )
+                    ],
+                ),
+            ),
+        )
+    except ApiException as exc:
+        if exc.status != 409:
+            raise
+
+    return ns_name
+
+
+# --------------------------------------------------------------------------- #
 # Synchronous helpers (run in thread pool)
 # --------------------------------------------------------------------------- #
 
@@ -185,9 +280,10 @@ def _sync_create(
     user_id: int,
     container_id: int,
     image: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
+    """Returns (pod_name, svc_name, namespace)."""
+    ns = _sync_ensure_user_namespace(user_id)
     v1 = _get_v1()
-    ns = settings.container_namespace
     p_name = _pod_name(user_id, container_id)
     s_name = _svc_name(user_id, container_id)
 
@@ -216,12 +312,11 @@ def _sync_create(
                 np_name, exc,
             )
 
-    return p_name, s_name
+    return p_name, s_name, ns
 
 
-def _sync_delete(user_id: int, container_id: int) -> None:
+def _sync_delete(user_id: int, container_id: int, namespace: str) -> None:
     v1 = _get_v1()
-    ns = settings.container_namespace
     p_name = _pod_name(user_id, container_id)
     s_name = _svc_name(user_id, container_id)
     np_name = _netpol_name(user_id, container_id)
@@ -231,7 +326,7 @@ def _sync_delete(user_id: int, container_id: int) -> None:
         (v1.delete_namespaced_service, s_name),
     ]:
         try:
-            fn(name=name, namespace=ns)
+            fn(name=name, namespace=namespace)
         except ApiException as exc:
             if exc.status != 404:
                 raise
@@ -240,7 +335,7 @@ def _sync_delete(user_id: int, container_id: int) -> None:
         _get_custom_api().delete_namespaced_custom_object(
             group="cilium.io",
             version="v2",
-            namespace=ns,
+            namespace=namespace,
             plural="ciliumnetworkpolicies",
             name=np_name,
         )
@@ -250,13 +345,12 @@ def _sync_delete(user_id: int, container_id: int) -> None:
             logger.warning("Could not delete CiliumNetworkPolicy %s: %s", np_name, exc)
 
 
-def _sync_get_status(user_id: int, container_id: int) -> str:
+def _sync_get_status(user_id: int, container_id: int, namespace: str) -> str:
     v1 = _get_v1()
-    ns = settings.container_namespace
     p_name = _pod_name(user_id, container_id)
 
     try:
-        pod = v1.read_namespaced_pod(name=p_name, namespace=ns)
+        pod = v1.read_namespaced_pod(name=p_name, namespace=namespace)
     except ApiException as exc:
         if exc.status == 404:
             return "stopped"
@@ -279,12 +373,11 @@ def _sync_get_status(user_id: int, container_id: int) -> str:
     return "starting"
 
 
-def _sync_get_pod_ip(user_id: int, container_id: int) -> Optional[str]:
+def _sync_get_pod_ip(user_id: int, container_id: int, namespace: str) -> Optional[str]:
     v1 = _get_v1()
-    ns = settings.container_namespace
     p_name = _pod_name(user_id, container_id)
     try:
-        pod = v1.read_namespaced_pod(name=p_name, namespace=ns)
+        pod = v1.read_namespaced_pod(name=p_name, namespace=namespace)
         return pod.status.pod_ip
     except ApiException:
         return None
@@ -294,23 +387,28 @@ def _sync_get_pod_ip(user_id: int, container_id: int) -> Optional[str]:
 # Async public API
 # --------------------------------------------------------------------------- #
 
+async def ensure_user_namespace(user_id: int) -> str:
+    """Create the per-user namespace (idempotent). Returns namespace name."""
+    return await asyncio.to_thread(_sync_ensure_user_namespace, user_id)
+
+
 async def create_pod_and_service(
     user_id: int,
     container_id: int,
     image: str,
-) -> tuple[str, str]:
-    """Returns (pod_name, svc_name). Raises RuntimeError on failure."""
+) -> tuple[str, str, str]:
+    """Returns (pod_name, svc_name, namespace). Raises RuntimeError on failure."""
     return await asyncio.to_thread(_sync_create, user_id, container_id, image)
 
 
-async def delete_pod_and_service(user_id: int, container_id: int) -> None:
-    await asyncio.to_thread(_sync_delete, user_id, container_id)
+async def delete_pod_and_service(user_id: int, container_id: int, namespace: str) -> None:
+    await asyncio.to_thread(_sync_delete, user_id, container_id, namespace)
 
 
-async def get_pod_status(user_id: int, container_id: int) -> str:
+async def get_pod_status(user_id: int, container_id: int, namespace: str) -> str:
     """Returns one of: pending, starting, running, stopped."""
-    return await asyncio.to_thread(_sync_get_status, user_id, container_id)
+    return await asyncio.to_thread(_sync_get_status, user_id, container_id, namespace)
 
 
-async def get_pod_ip(user_id: int, container_id: int) -> Optional[str]:
-    return await asyncio.to_thread(_sync_get_pod_ip, user_id, container_id)
+async def get_pod_ip(user_id: int, container_id: int, namespace: str) -> Optional[str]:
+    return await asyncio.to_thread(_sync_get_pod_ip, user_id, container_id, namespace)

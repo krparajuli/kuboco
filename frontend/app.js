@@ -685,8 +685,7 @@ async function route() {
     // Try to restore session from backend cookie
     try {
       const me = await API.me();
-      const storedToken = Session.getToken();
-      Session.set(me, storedToken);
+      Session.set(me, me.access_token);
     } catch {
       return Router.go('/login');
     }

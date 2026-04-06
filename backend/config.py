@@ -4,14 +4,15 @@ from pydantic_settings import BaseSettings
 
 
 class ImageNetworkPolicy(BaseModel):
-    """Ingress/egress rules for pods created from a specific image.
+    """Egress rules for pods created from a specific image.
 
     Implemented via CiliumNetworkPolicy (requires Cilium CNI).
-    egress_deny_fqdns:  domains blocked on egress (supports wildcard patterns, e.g. *.google.com).
-    ingress_allow_all:  when False, all ingress to the pod is denied.
+    Ingress is controlled at the namespace level (deny-all-ingress +
+    allow-from-backend standard NetworkPolicies), so only egress is configured here.
+
+    egress_deny_fqdns: domains blocked on egress (wildcard patterns supported, e.g. *.google.com).
     """
     egress_deny_fqdns: list[str] = []
-    ingress_allow_all: bool = True
 
 
 class Settings(BaseSettings):

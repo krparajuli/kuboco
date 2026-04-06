@@ -5,12 +5,12 @@ metadata:
   name: kuboco-backend
   namespace: kuboco
 ---
-# Role scoped to "kuboco-containers" — least privilege, no cluster-wide access
+# ClusterRole: manage pods/services in any kuboco-user-* namespace, and
+# create/get namespaces and NetworkPolicies for the per-user namespace bootstrap.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: kuboco-container-manager
-  namespace: kuboco-containers
 rules:
   - apiGroups: [""]
     resources: ["pods", "pods/status", "pods/log"]
@@ -18,18 +18,23 @@ rules:
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create", "get", "list"]
 ---
-# Bind the SA in "kuboco" to the Role in "kuboco-containers"
+# Bind the backend SA to the ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: kuboco-backend-binding
-  namespace: kuboco-containers
 subjects:
   - kind: ServiceAccount
     name: kuboco-backend
     namespace: kuboco
 roleRef:
-  kind: Role
+  kind: ClusterRole
   name: kuboco-container-manager
   apiGroup: rbac.authorization.k8s.io

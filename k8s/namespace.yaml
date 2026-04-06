@@ -4,10 +4,5 @@ metadata:
   name: kuboco
   labels:
     kubernetes.io/metadata.name: kuboco
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: kuboco-containers
-  labels:
-    kubernetes.io/metadata.name: kuboco-containers
+# Per-user namespaces (kuboco-user-{id}) are created dynamically by the backend
+# when a user first spawns a container. No static manifest needed.

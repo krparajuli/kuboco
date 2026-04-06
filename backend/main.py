@@ -205,9 +205,13 @@ async def logout():
 
 @app.get("/api/auth/me")
 async def me(current_user: User = Depends(get_current_user)):
+    # Return a fresh token so the frontend can restore it to sessionStorage
+    # after a page reload (the cookie is httponly and unreadable by JS).
+    fresh_token = create_access_token(current_user.id)
     return {
         "id": current_user.id,
         "username": current_user.username,
+        "access_token": fresh_token,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
     }
 
@@ -265,7 +269,7 @@ async def create_container(
         name=req.name,
         pod_name="",
         svc_name="",
-        namespace=settings.container_namespace,
+        namespace="",
         status="pending",
         image=image,
     )
@@ -275,13 +279,14 @@ async def create_container(
     from backend import k8s_controller as k8s
 
     try:
-        pod_name, svc_name = await k8s.create_pod_and_service(
+        pod_name, svc_name, namespace = await k8s.create_pod_and_service(
             user_id=current_user.id,
             container_id=container.id,
             image=image,
         )
         container.pod_name = pod_name
         container.svc_name = svc_name
+        container.namespace = namespace
         container.status = "starting"
     except Exception as exc:
         container.status = "error"
@@ -307,7 +312,7 @@ async def get_container(
         from backend import k8s_controller as k8s
 
         try:
-            live = await k8s.get_pod_status(current_user.id, container.id)
+            live = await k8s.get_pod_status(current_user.id, container.id, container.namespace)
             if live != container.status:
                 container.status = live
                 if live == "stopped":
@@ -331,7 +336,7 @@ async def delete_container(
         from backend import k8s_controller as k8s
 
         try:
-            await k8s.delete_pod_and_service(current_user.id, container.id)
+            await k8s.delete_pod_and_service(current_user.id, container.id, container.namespace)
         except Exception as exc:
             logger.error("Failed to delete k8s resources for container %d: %s", container.id, exc)
             raise HTTPException(status_code=500, detail=f"Failed to delete container: {exc}")
@@ -352,13 +357,15 @@ async def ws_terminal(
     token: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    # Authenticate via query param token
-    if not token:
+    # Accept token from query param or httponly cookie (cookie is sent
+    # automatically by the browser on same-origin WS upgrade requests).
+    effective_token = token or websocket.cookies.get("kuboco_token")
+    if not effective_token:
         await websocket.close(code=4001, reason="Missing token")
         return
 
     try:
-        payload = decode_token(token)
+        payload = decode_token(effective_token)
         user_id = int(payload["sub"])
     except Exception:
         await websocket.close(code=4001, reason="Invalid token")
@@ -397,12 +404,13 @@ async def ws_port(
         await websocket.close(code=4000, reason="Invalid port")
         return
 
-    if not token:
+    effective_token = token or websocket.cookies.get("kuboco_token")
+    if not effective_token:
         await websocket.close(code=4001, reason="Missing token")
         return
 
     try:
-        payload = decode_token(token)
+        payload = decode_token(effective_token)
         user_id = int(payload["sub"])
     except Exception:
         await websocket.close(code=4001, reason="Invalid token")
