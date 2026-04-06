@@ -24,6 +24,10 @@ def _svc_name(user_id: int, container_id: int) -> str:
     return f"kuboco-svc-{user_id}-{container_id}"
 
 
+def _netpol_name(user_id: int, container_id: int) -> str:
+    return f"kuboco-netpol-{user_id}-{container_id}"
+
+
 def get_svc_dns(user_id: int, container_id: int) -> str:
     return (
         f"kuboco-svc-{user_id}-{container_id}"
@@ -49,6 +53,46 @@ def _load_k8s_config() -> None:
 def _get_v1() -> client.CoreV1Api:
     _load_k8s_config()
     return client.CoreV1Api()
+
+
+def _get_custom_api() -> client.CustomObjectsApi:
+    _load_k8s_config()
+    return client.CustomObjectsApi()
+
+
+def _build_cilium_netpol(
+    netpol_name: str,
+    pod_name: str,
+    namespace: str,
+    policy: "ImageNetworkPolicy",  # backend.config.ImageNetworkPolicy
+) -> dict:
+    """Build a CiliumNetworkPolicy manifest for a pod.
+
+    Egress: allow everything except the explicitly denied FQDNs.
+    Ingress: allow all (or deny all when ingress_allow_all=False).
+    """
+    spec: dict = {
+        "endpointSelector": {"matchLabels": {"pod-name": pod_name}},
+        "egress": [{}],  # allow all egress not explicitly denied
+    }
+
+    if policy.egress_deny_fqdns:
+        to_fqdns = [
+            {"matchPattern": fqdn} if "*" in fqdn else {"matchName": fqdn}
+            for fqdn in policy.egress_deny_fqdns
+        ]
+        spec["egressDeny"] = [{"toFQDNs": to_fqdns}]
+
+    if policy.ingress_allow_all:
+        spec["ingress"] = [{}]
+    # ingress_allow_all=False → omit ingress → Cilium denies all ingress
+
+    return {
+        "apiVersion": "cilium.io/v2",
+        "kind": "CiliumNetworkPolicy",
+        "metadata": {"name": netpol_name, "namespace": namespace},
+        "spec": spec,
+    }
 
 
 def _build_pod(
@@ -152,6 +196,26 @@ def _sync_create(
 
     v1.create_namespaced_pod(namespace=ns, body=pod)
     v1.create_namespaced_service(namespace=ns, body=svc)
+
+    image_policy = settings.image_network_policies.get(image)
+    if image_policy is not None:
+        np_name = _netpol_name(user_id, container_id)
+        netpol = _build_cilium_netpol(np_name, p_name, ns, image_policy)
+        try:
+            _get_custom_api().create_namespaced_custom_object(
+                group="cilium.io",
+                version="v2",
+                namespace=ns,
+                plural="ciliumnetworkpolicies",
+                body=netpol,
+            )
+            logger.debug("Created CiliumNetworkPolicy %s", np_name)
+        except ApiException as exc:
+            logger.warning(
+                "Could not create CiliumNetworkPolicy %s (Cilium available?): %s",
+                np_name, exc,
+            )
+
     return p_name, s_name
 
 
@@ -160,6 +224,7 @@ def _sync_delete(user_id: int, container_id: int) -> None:
     ns = settings.container_namespace
     p_name = _pod_name(user_id, container_id)
     s_name = _svc_name(user_id, container_id)
+    np_name = _netpol_name(user_id, container_id)
 
     for fn, name in [
         (v1.delete_namespaced_pod, p_name),
@@ -170,6 +235,19 @@ def _sync_delete(user_id: int, container_id: int) -> None:
         except ApiException as exc:
             if exc.status != 404:
                 raise
+
+    try:
+        _get_custom_api().delete_namespaced_custom_object(
+            group="cilium.io",
+            version="v2",
+            namespace=ns,
+            plural="ciliumnetworkpolicies",
+            name=np_name,
+        )
+        logger.debug("Deleted CiliumNetworkPolicy %s", np_name)
+    except ApiException as exc:
+        if exc.status != 404:
+            logger.warning("Could not delete CiliumNetworkPolicy %s: %s", np_name, exc)
 
 
 def _sync_get_status(user_id: int, container_id: int) -> str:

@@ -1,5 +1,17 @@
 from typing import Optional
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+
+
+class ImageNetworkPolicy(BaseModel):
+    """Ingress/egress rules for pods created from a specific image.
+
+    Implemented via CiliumNetworkPolicy (requires Cilium CNI).
+    egress_deny_fqdns:  domains blocked on egress (supports wildcard patterns, e.g. *.google.com).
+    ingress_allow_all:  when False, all ingress to the pod is denied.
+    """
+    egress_deny_fqdns: list[str] = []
+    ingress_allow_all: bool = True
 
 
 class Settings(BaseSettings):
@@ -26,6 +38,17 @@ class Settings(BaseSettings):
     ttyd_port: int = 7681
     max_containers_per_user: int = 5
     kubeconfig_path: Optional[str] = None
+
+    # Per-image network policies (applied as CiliumNetworkPolicy).
+    # Keys must match entries in allowed_images.
+    image_network_policies: dict[str, ImageNetworkPolicy] = {
+        "kuboco/ubuntu-ttyd:latest": ImageNetworkPolicy(
+            egress_deny_fqdns=["google.com", "*.google.com"],
+        ),
+        "kuboco/ironclaude:latest": ImageNetworkPolicy(
+            egress_deny_fqdns=["google.com", "*.google.com"],
+        ),
+    }
 
     class Config:
         env_file = ".env"
