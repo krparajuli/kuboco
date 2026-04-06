@@ -30,7 +30,6 @@ class Settings(BaseSettings):
         "kuboco/ubuntu-ttyd:latest",
         "kuboco/ironclaude:latest",
     ]
-    container_namespace: str = "kuboco-containers"
     backend_namespace: str = "kuboco"
     pod_cpu_limit: str = "1"
     pod_memory_limit: str = "1Gi"

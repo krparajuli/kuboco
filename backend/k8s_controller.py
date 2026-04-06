@@ -36,6 +36,11 @@ def _user_namespace(user_id: int) -> str:
     return f"kuboco-user-{user_id}"
 
 
+def user_namespace_name(user_id: int) -> str:
+    """Return the deterministic namespace name for a user (does not create it)."""
+    return _user_namespace(user_id)
+
+
 def get_svc_dns(user_id: int, container_id: int, namespace: str) -> str:
     return (
         f"kuboco-svc-{user_id}-{container_id}"
@@ -379,8 +384,10 @@ def _sync_get_pod_ip(user_id: int, container_id: int, namespace: str) -> Optiona
     try:
         pod = v1.read_namespaced_pod(name=p_name, namespace=namespace)
         return pod.status.pod_ip
-    except ApiException:
-        return None
+    except ApiException as exc:
+        if exc.status == 404:
+            return None
+        raise
 
 
 # --------------------------------------------------------------------------- #

@@ -38,8 +38,6 @@ from backend.models import Container, User
 
 logger = logging.getLogger(__name__)
 
-_CONTAINER_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,30}[a-z0-9]$")
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -264,19 +262,19 @@ async def create_container(
             status_code=400,
             detail=f"Image not permitted. Allowed: {', '.join(settings.allowed_images)}",
         )
+    from backend import k8s_controller as k8s
+
     container = Container(
         user_id=current_user.id,
         name=req.name,
         pod_name="",
         svc_name="",
-        namespace="",
+        namespace=k8s.user_namespace_name(current_user.id),
         status="pending",
         image=image,
     )
     db.add(container)
     await db.flush()  # get container.id before k8s call
-
-    from backend import k8s_controller as k8s
 
     try:
         pod_name, svc_name, namespace = await k8s.create_pod_and_service(
@@ -377,7 +375,11 @@ async def ws_terminal(
         await websocket.close(code=4001, reason="User not found")
         return
 
-    container = await require_owned_container(container_id, user, db)
+    try:
+        container = await require_owned_container(container_id, user, db)
+    except HTTPException as exc:
+        await websocket.close(code=4003, reason=exc.detail)
+        return
     if container.status not in ("running", "starting"):
         await websocket.close(code=4004, reason="Container not running")
         return
@@ -422,7 +424,11 @@ async def ws_port(
         await websocket.close(code=4001, reason="User not found")
         return
 
-    container = await require_owned_container(container_id, user, db)
+    try:
+        container = await require_owned_container(container_id, user, db)
+    except HTTPException as exc:
+        await websocket.close(code=4003, reason=exc.detail)
+        return
     if container.status != "running":
         await websocket.close(code=4004, reason="Container not running")
         return
