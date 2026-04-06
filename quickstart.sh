@@ -91,7 +91,7 @@ info "Applying Kubernetes manifests…"
 
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/rbac.yaml
-kubectl apply -f k8s/network-policy.yaml
+# k8s/network-policy.yaml has no static objects — policies are created dynamically by the backend
 
 # Patch the SECRET_KEY into the k8s Secret before applying
 SECRET_KEY_VAL=$(grep '^SECRET_KEY=' .env | cut -d= -f2-)
