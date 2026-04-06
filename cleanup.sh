@@ -39,21 +39,23 @@ echo ""
 # ── Kubernetes cleanup ────────────────────────────────────────────────────────
 if command -v kubectl &>/dev/null && kubectl cluster-info --request-timeout=5s &>/dev/null 2>&1; then
 
-    # Delete all user container pods/services in kuboco-containers first
-    info "Deleting all user container pods and services in kuboco-containers…"
-    kubectl delete pods     --all -n kuboco-containers --ignore-not-found 2>/dev/null || true
-    kubectl delete services --all -n kuboco-containers --ignore-not-found 2>/dev/null || true
+    # Delete all per-user namespaces (kuboco-user-*)
+    info "Deleting per-user namespaces (kuboco-user-*)…"
+    kubectl get namespaces -o name 2>/dev/null \
+        | grep '^namespace/kuboco-user-' \
+        | xargs -r kubectl delete --ignore-not-found 2>/dev/null || true
+
+    # Legacy: kuboco-containers namespace (pre-per-user-namespace builds)
+    kubectl delete namespace kuboco-containers --ignore-not-found 2>/dev/null || true
 
     # Delete backend resources (deployment, service, secret, configmap, pvc)
     info "Deleting backend deployment and resources…"
     kubectl delete -f k8s/backend.yaml       --ignore-not-found 2>/dev/null || true
-    kubectl delete -f k8s/network-policy.yaml --ignore-not-found 2>/dev/null || true
     kubectl delete -f k8s/rbac.yaml          --ignore-not-found 2>/dev/null || true
 
-    # Delete namespaces last (this also removes anything left inside them)
-    info "Deleting namespaces kuboco and kuboco-containers…"
-    kubectl delete namespace kuboco            --ignore-not-found 2>/dev/null || true
-    kubectl delete namespace kuboco-containers --ignore-not-found 2>/dev/null || true
+    # Delete kuboco namespace last
+    info "Deleting namespace kuboco…"
+    kubectl delete namespace kuboco --ignore-not-found 2>/dev/null || true
 
     success "Kubernetes resources deleted."
 else

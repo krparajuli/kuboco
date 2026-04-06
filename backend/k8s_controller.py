@@ -295,8 +295,30 @@ def _sync_create(
     pod = _build_pod(p_name, user_id, container_id, image, ns)
     svc = _build_service(s_name, p_name, ns)
 
-    v1.create_namespaced_pod(namespace=ns, body=pod)
-    v1.create_namespaced_service(namespace=ns, body=svc)
+    try:
+        v1.create_namespaced_pod(namespace=ns, body=pod)
+    except ApiException as exc:
+        if exc.status != 409:
+            raise
+        # Stale orphan pod (e.g. DB was reset but K8s wasn't cleaned). Delete and recreate.
+        logger.warning("Pod %s already exists (orphan); deleting and recreating", p_name)
+        try:
+            v1.delete_namespaced_pod(name=p_name, namespace=ns)
+        except ApiException:
+            pass
+        v1.create_namespaced_pod(namespace=ns, body=pod)
+
+    try:
+        v1.create_namespaced_service(namespace=ns, body=svc)
+    except ApiException as exc:
+        if exc.status != 409:
+            raise
+        logger.warning("Service %s already exists (orphan); deleting and recreating", s_name)
+        try:
+            v1.delete_namespaced_service(name=s_name, namespace=ns)
+        except ApiException:
+            pass
+        v1.create_namespaced_service(namespace=ns, body=svc)
 
     image_policy = settings.image_network_policies.get(image)
     if image_policy is not None:

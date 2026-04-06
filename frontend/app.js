@@ -111,6 +111,21 @@ const TerminalMgr = {
 
     this.fitAddon = new FitAddon.FitAddon();
     this.term.loadAddon(this.fitAddon);
+
+    // Make URLs in terminal output clickable. localhost:PORT URLs are rewritten
+    // through the port proxy so they open correctly in the user's browser.
+    const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
+      const localMatch = uri.match(/^https?:\/\/(localhost|127\.0\.0\.1):(\d+)(\/.*)?$/);
+      if (localMatch) {
+        const port = localMatch[2];
+        const path = localMatch[3] || '/';
+        window.open(`/api/proxy/${containerId}/${port}${path}`, '_blank');
+      } else {
+        window.open(uri, '_blank');
+      }
+    });
+    this.term.loadAddon(webLinksAddon);
+
     this.term.open(mountEl);
     this.fitAddon.fit();
 
