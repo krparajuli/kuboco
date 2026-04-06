@@ -182,14 +182,21 @@ RUN node_bin=$(find /opt/nvm/versions/node -maxdepth 3 -name node -type f | sort
 # ttyd
 COPY --from=ttyd-stage /usr/local/bin/ttyd /usr/local/bin/ttyd
 
+# ── devusr — UID/GID 30002 ────────────────────────────────────────────────────
+RUN groupadd -g 30002 devusr && \
+    useradd -u 30002 -g 30002 -m -s /bin/bash devusr && \
+    echo 'devusr ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Hand ownership of the tool directories to devusr so nvm install,
+# cargo install, and rustup work without sudo at runtime.
+RUN chown -R devusr:devusr /opt/nvm /opt/cargo /opt/rustup
+
 # ── Environment profile ───────────────────────────────────────────────────────
-# Sourced automatically by every login shell via /etc/profile.
-# Sets PATH and environment variables for all installed toolchains.
 RUN cat > /etc/profile.d/ironclaude.sh <<'EOF'
 # Go
 export PATH=/usr/local/go/bin:$PATH
-export GOPATH=/root/go
-export GOMODCACHE=/root/go/pkg/mod
+export GOPATH=/home/devusr/go
+export GOMODCACHE=/home/devusr/go/pkg/mod
 export PATH=$GOPATH/bin:$PATH
 
 # Rust / Cargo
@@ -204,29 +211,29 @@ export NVM_DIR=/opt/nvm
 EOF
 
 # ── Zellij layout ─────────────────────────────────────────────────────────────
-# Tab 1 (claude): starts Claude Code automatically with permissions bypassed
-#                 (appropriate inside an isolated container).
-# Tab 2 (shell):  plain bash for running commands alongside Claude.
-# Switch tabs with Alt+1 / Alt+2, or Ctrl+t then arrow keys.
-RUN mkdir -p /root/.config/zellij/layouts \
- && cat > /root/.config/zellij/layouts/ironclaude.kdl <<'EOF'
+RUN mkdir -p /home/devusr/.config/zellij/layouts \
+ && cat > /home/devusr/.config/zellij/layouts/ironclaude.kdl <<'EOF'
 layout {
     tab name="claude" focus=true {
         pane command="claude" {
             args "--dangerously-skip-permissions"
-            cwd "/root"
+            cwd "/home/devusr"
         }
     }
     tab name="shell" {
-        pane cwd="/root"
+        pane cwd="/home/devusr"
     }
 }
 EOF
+RUN chown -R devusr:devusr /home/devusr/.config
 
 # ── Entrypoint and shell ──────────────────────────────────────────────────────
 COPY entrypoint.sh /entrypoint.sh
 COPY shell.sh      /shell.sh
 RUN  chmod +x /entrypoint.sh /shell.sh
+
+USER devusr
+WORKDIR /home/devusr
 
 EXPOSE 7681
 

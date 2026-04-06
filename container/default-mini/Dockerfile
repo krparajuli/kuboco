@@ -40,15 +40,17 @@ RUN DEB_ARCH=$(dpkg --print-architecture) && \
     chmod +x /usr/local/bin/ttyd && \
     ttyd --version
 
-# Create a non-root user (processes still run as this user in the shell)
-RUN useradd -m -s /bin/bash user && \
-    echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+# Create devusr with UID/GID 30002
+RUN groupadd -g 30002 devusr && \
+    useradd -u 30002 -g 30002 -m -s /bin/bash devusr && \
+    echo 'devusr ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# ttyd listens on 7681, wraps bash
-# --interface 0.0.0.0 is required for Kubernetes pod networking
+USER devusr
+WORKDIR /home/devusr
+
+# ttyd listens on 7681 (unprivileged port — no root needed)
 EXPOSE 7681
 
-# Run as root so ttyd can bind and exec; the shell user can sudo
 CMD ["/usr/local/bin/ttyd", \
      "--port",      "7681", \
      "--interface", "0.0.0.0", \

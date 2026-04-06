@@ -15,10 +15,10 @@ export NVM_DIR=/opt/nvm
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 
 # Start in the home directory.
-cd /root
+cd ~
 
 if command -v zellij &>/dev/null; then
-    exec zellij --layout /root/.config/zellij/layouts/ironclaude.kdl
+    exec zellij --layout ~/.config/zellij/layouts/ironclaude.kdl
 else
     exec bash -i
 fi

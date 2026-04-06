@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Create the Go workspace directory tree on first boot.
-mkdir -p /root/go/{bin,pkg,src}
+mkdir -p ~/go/{bin,pkg,src}
 
 # Ensure Cargo's bin directory exists so `cargo install` works immediately
 # without needing a prior `cargo` invocation.
